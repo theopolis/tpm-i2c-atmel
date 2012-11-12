@@ -1,7 +1,7 @@
-obj-m += atmel-i2c-tpm.o
-KDIR := linux
+obj-m += tpm_i2c_atmel.o
+KDIR := /usr/local/src/linux/
 PWD := $(shell pwd)
-CROSS := ARCH=arm CROSS_COMPILE=arm-unknown-linux-gnueabi-
+CROSS := ARCH=arm CROSS_COMPILE=/usr/local/armv7-hard/bin/arm-unknown-linux-gnueabi-
 all: 
 		$(MAKE) $(CROSS) -C $(KDIR) SUBDIRS=$(PWD) modules
 
