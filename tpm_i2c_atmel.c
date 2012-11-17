@@ -1,8 +1,31 @@
 /*
- * atmel-i2c-tpm.c
+ * Copyright (C) 2012 V Lab Technologies
  *
- *  Created on: Sep 3, 2012
- *      Author: teddy
+ * Authors:
+ * Teddy Reed <teddy.reed@gmail.com>
+ *
+ * Device driver for TCG/TCPA TPM (trusted platform module).
+ * Specifications at www.trustedcomputinggroup.org
+ *
+ * This device driver implements the TPM interface as defined in
+ * the TCG TPM Interface Spec version 1.2.
+ *
+ * It is based on the original tpm_tis device driver from Leendert van
+ * Dorn and Kyleen Hall, the Infineon driver from Peter Huewe and the
+ * Atmel AVR-based TPM development board firmware.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, version 2 of the
+ * License.
+ */
+
+/*
+ * Beaglebone R5 testing:
+ * MUX MODE for i2c2
+ * P9 19: Mode 2 (SLC)
+ * P9 20: Mode 2 (SDA)
+ * echo tpm_i2c_atmel 0x29 > /sys/bus/i2c/devices/i2c-3/new_device
  */
 
 #include <linux/kernel.h>
@@ -13,20 +36,10 @@
 #include "tpm.h"
 #include "tpm_i2c.h"
 
-/*
-static struct i2c_driver atmel_tpm_driver = {
-		.owner 		= THIS_MODULE,
-		.name		= "atmel_tpm",
-		//.flags 		= I2C_DF_NOTIFY,
-		//.attach_adapter = atmel_tpm_attach_adapter,
-		//.detatch_client	= atmel_tpm_detach_client,
-};
-*/
-
 /* max. buffer size supported by our (infineon) TPM */
 #define TPM_BUFSIZE 1260
 
-/* copied from infineon, but defined in TIS */
+/* copied from Infineon, but defined in TIS */
 enum tis_access {
 	TPM_ACCESS_VALID = 0x80,
 	TPM_ACCESS_ACTIVE_LOCALITY = 0x20,
@@ -60,8 +73,11 @@ static struct i2c_driver tpm_tis_i2c_driver;
 
 int atpm_read_value (struct i2c_client *client, unsigned int /*u8*/ reg);
 int atpm_write_value (struct i2c_client *client, unsigned int reg, unsigned long /*u16*/ value);
-static int __init tpm_tis_i2c_probe (struct i2c_client *client, const struct i2c_device_id *id);
+static int __devinit tpm_tis_i2c_probe (struct i2c_client *client, const struct i2c_device_id *id);
 static int __devexit atpm_remove (struct i2c_client *client);
+
+static int __devinit tpm_tis_i2c_init (void);
+static void __devexit tpm_tis_i2c_exit (void);
 
 /* working from: mjmwired.net/kernel/Docuymentation/i2c/writing-clients */
 static struct i2c_device_id tpm_tis_i2c_table[] = {
@@ -78,19 +94,21 @@ int atpm_write_value (struct i2c_client *client, unsigned int reg, unsigned long
 	return 0;
 }
 
-static int __init tpm_tis_i2c_probe (struct i2c_client *client,
+static int __devinit tpm_tis_i2c_probe (struct i2c_client *client,
 		const struct i2c_device_id *id) {
-	int rc;
+	//int rc;
 
-	printk(KERN_INFO "probed atpm\n");
-	if (tpm_dev.client != NULL) {
-		return -EBUSY; /* Only support one client */
-	}
+	//printk(KERN_INFO "probed atpm\n");
+	//return 0;
+	//if (tpm_dev.client != NULL) {
+	//	return -EBUSY; /* Only support one client */
+	//}
 
-	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
-		dev_err(&client->dev, "failed algorithm check on i2c bus.");
-		return -ENODEV;
-	}
+	//if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+	//	dev_err(&client->dev, "failed algorithm check on i2c bus.");
+	//	return -ENODEV;
+	//}
+	//tpm_dev.client = client;
 
 	//printk(KERN_INFO "probed atpm\n");
 	return 0;
@@ -181,6 +199,7 @@ static struct tpm_vendor_specific tpm_tis_i2c = {
 };
 /* end direct from infineon */
 
+#ifdef NOT_DEFINED
 static int __init tpm_tis_i2c_init (struct device *dev)
 {
 	u32 vendor;
@@ -205,10 +224,10 @@ static void __devexit atpm_cleanup (void)
 	i2c_del_driver(&tpm_tis_i2c_driver);
 	printk(KERN_INFO "cleanup_module() called\n");
 }
+#endif
 
-/* todo: lookup MODULE_DEVICE_TABLE */
+
 MODULE_DEVICE_TABLE(i2c, tpm_tis_i2c_table);
-/* not sure what this does */
 static SIMPLE_DEV_PM_OPS(tpm_tis_i2c_ops, tpm_pm_suspend, tpm_pm_resume);
 
 static struct i2c_driver tpm_tis_i2c_driver = {
@@ -222,9 +241,25 @@ static struct i2c_driver tpm_tis_i2c_driver = {
 		.id_table = tpm_tis_i2c_table,
 };
 
+/* Board info modification
+ * i2c2 on Beaglebone for 3.2.0 kernel is bus: i2c-3
+static struct i2c_board_info __initdata beagle_i2c_devices[] = {
+		{ I2C_BOARD_INFO("tpm_i2c_atmel", 0x29), }
+};
+*/
+
+static int __devinit tpm_tis_i2c_init (void) {
+	printk(KERN_INFO "init atpm\n");
+	return i2c_add_driver(&tpm_tis_i2c_driver);
+}
+
+static void __devexit tpm_tis_i2c_exit (void) {
+	i2c_del_driver(&tpm_tis_i2c_driver);
+}
+
 module_init(tpm_tis_i2c_init);
-module_exit(atpm_cleanup);
-//module_i2c_driver(tpm_tis_i2c_driver);
+module_exit(tpm_tis_i2c_exit);
+
 MODULE_AUTHOR("Teddy Reed <teddy.reed@gmail.com");
 MODULE_DESCRIPTION("Driver for ATMEL's AT97SC3204T TPM.");
 MODULE_LICENSE("GPL");

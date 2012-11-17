@@ -3,11 +3,11 @@
 	<name>atmel-i2c-tpm</name>
 	<comment></comment>
 	<projects>
-		<project>linux-bb-3.2.0</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
 			<name>org.eclipse.cdt.managedbuilder.core.genmakebuilder</name>
+			<triggers>clean,full,incremental,</triggers>
 			<arguments>
 				<dictionary>
 					<key>?name?</key>
@@ -23,15 +23,11 @@
 				</dictionary>
 				<dictionary>
 					<key>org.eclipse.cdt.make.core.buildArguments</key>
-					<value>-load gentoo-builder make -C /mnt/git/atmel-i2c-tpm/</value>
+					<value>-load &quot;fun&quot; make -C /mnt/hgfs/git/atmel-i2c-tpm</value>
 				</dictionary>
 				<dictionary>
 					<key>org.eclipse.cdt.make.core.buildCommand</key>
 					<value>plink.exe</value>
-				</dictionary>
-				<dictionary>
-					<key>org.eclipse.cdt.make.core.buildLocation</key>
-					<value>${workspace_loc:/atmel-i2c-tpm/Debug}</value>
 				</dictionary>
 				<dictionary>
 					<key>org.eclipse.cdt.make.core.cleanBuildTarget</key>
