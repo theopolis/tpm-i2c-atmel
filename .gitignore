@@ -1,6 +1,8 @@
 *.mod*
 *.o
 *.ko
+Debug
+*.cmd
 Module.symvers
 .tmp_versions
 modules.order
