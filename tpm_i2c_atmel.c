@@ -56,7 +56,6 @@ static void __devexit tpm_tis_i2c_exit (void);
 static int tpm_i2c_write(u8 *buffer, size_t len)
 {
 	int rc;
-	int count;
 
 	struct i2c_msg msg1 = { tpm_dev.client->addr, 0, len, tpm_dev.buf };
 
@@ -65,7 +64,8 @@ static int tpm_i2c_write(u8 *buffer, size_t len)
 		return -EINVAL;
 	}
 
-	/** should lock the device **/
+	/** should lock the device
+	 * **/
 	memcpy(&(tpm_dev.buf[0]), buffer, len);
 	rc = i2c_transfer(tpm_dev.client->adapter, &msg1, 1);
 
@@ -163,22 +163,22 @@ static int tpm_tis_i2c_recv(struct tpm_chip *chip, u8 *buf, size_t count)
 
 static int tpm_tis_i2c_send(struct tpm_chip *chip, u8 *buf, size_t len)
 {
-	int rc;
+	int rc = 0;
 
 	printk(KERN_INFO "tpm_i2c_atmel, send, 0x%X, size %i\n", buf, len);
 	/** simple write **/
+	rc = tpm_i2c_write(buf, len);
 	printk(KERN_INFO "tpm_i2c_atmel, send, end\n");
 	return rc;
 }
-
 
 
 static const struct file_operations tis_ops = {
 	.owner = THIS_MODULE,
 	.llseek = no_llseek,
 	.open = tpm_open,
-	.read = tpm_tis_i2c_recv,
-	.write = tpm_tis_i2c_send,
+	.read = tpm_read,
+	.write = tpm_write,
 	.release = tpm_release,
 };
 
@@ -213,10 +213,10 @@ static struct attribute_group tis_attr_grp = {
 
 
 static struct tpm_vendor_specific tpm_tis_i2c = {
-	//.status = tpm_tis_i2c_status,
-	//.recv = tpm_tis_i2c_recv,
-	//.send = tpm_tis_i2c_send,
-	//.cancel = tpm_tis_i2c_ready,
+	.status = tpm_tis_i2c_status,
+	.recv = tpm_tis_i2c_recv,
+	.send = tpm_tis_i2c_send,
+	.cancel = tpm_tis_i2c_ready,
 	//.req_complete_mask = TPM_STS_DATA_AVAIL | TPM_STS_VALID,
 	//.req_complete_val = TPM_STS_DATA_AVAIL | TPM_STS_VALID,
 	//.req_canceled = TPM_STS_COMMAND_READY,
