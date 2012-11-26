@@ -6,3 +6,8 @@ Debug
 Module.symvers
 .tmp_versions
 modules.order
+
+#Eclipse artifacts
+.settings
+.project
+.*project
