@@ -48,6 +48,11 @@
 #include "tpm.h"
 #include "tpm_i2c.h"
 
+/* second i2c bus on BeagleBone with >=3.2 kernel */
+#define I2C_BUS_ID 0x03
+/* Atmel-defined I2C bus ID */
+#define ATMEL_I2C_ID 0x29
+
 /** Found in AVR code and in Max's implementation **/
 #define TPM_BUFSIZE 1024
 
@@ -61,13 +66,16 @@ struct tpm_i2c_atmel_dev tpm_dev;
 static struct i2c_driver tpm_tis_i2c_driver;
 
 static u8 tpm_i2c_read(u8 *buffer, size_t len);
-static ssize_t tpm_tis_i2c_read (struct file *file, char __user *buf, size_t count, loff_t *offp);
-static ssize_t tpm_tis_i2c_write (struct file *file, const char __user *buf, size_t count, loff_t *offp);
+
+static void tpm_tis_i2c_ready (struct tpm_chip *chip);
+static void tpm_tis_i2c_status (struct tpm_chip *chip);
+static int tpm_tis_i2c_recv (struct tpm_chip *chip, u8 *buf, size_t count);
+static int tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count);
 static int tpm_tis_i2c_open (struct inode *inode, struct file *pfile);
 static int tpm_tis_i2c_release (struct inode *inode, struct file *pfile);
 
 static int __devinit tpm_tis_i2c_probe (struct i2c_client *client, const struct i2c_device_id *id);
-static int __devexit tpm_tis_i2c_remove(struct i2c_client *client);
+static int __devexit tpm_tis_i2c_remove (struct i2c_client *client);
 static int __devinit tpm_tis_i2c_init (void);
 static void __devexit tpm_tis_i2c_exit (void);
 
@@ -106,7 +114,7 @@ static u8 tpm_i2c_read(u8 *buffer, size_t len)
 	return rc;
 }
 
-static ssize_t tpm_tis_i2c_read (struct file *file, char __user *buf, size_t count, loff_t *offp)
+static int tpm_tis_i2c_recv (struct tpm_chip *chip, u8 *buf, size_t count)
 {
 	int rc = 0;
 	int expected;
@@ -144,7 +152,7 @@ to_user:
 	return expected;
 }
 
-static ssize_t tpm_tis_i2c_write (struct file *file, const char __user *buf, size_t count, loff_t *offp)
+static int tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count)
 {
 	int rc;
 
@@ -174,6 +182,16 @@ static ssize_t tpm_tis_i2c_write (struct file *file, const char __user *buf, siz
 	return count;
 }
 
+static u8 tpm_tis_i2c_status (struct tpm_chip *chip)
+{
+	return 0; /* timeout */
+}
+
+static void tpm_tis_i2c_ready (struct tpm_chip *chip)
+{
+	//nothing
+}
+
 static int tpm_tis_i2c_open (struct inode *inode, struct file *pfile)
 {
 	return 0;
@@ -188,15 +206,50 @@ static const struct file_operations tis_ops = {
 	.owner = THIS_MODULE,
 	.llseek = no_llseek,
 	.open = tpm_tis_i2c_open,
-	.read = tpm_tis_i2c_read,
-	.write = tpm_tis_i2c_write,
+	.read = tpm_read,
+	.write = tpm_write,
 	.release = tpm_tis_i2c_release,
 };
 
-static struct miscdevice tis_device = {
-	.fops = &tis_ops,
-	.name = "tpm0",
-	.minor = MISC_DYNAMIC_MINOR,
+static DEVICE_ATTR(pubek, S_IRUGO, tpm_show_pubek, NULL);
+static DEVICE_ATTR(pcrs, S_IRUGO, tpm_show_pcrs, NULL);
+static DEVICE_ATTR(enabled, S_IRUGO, tpm_show_enabled, NULL);
+static DEVICE_ATTR(active, S_IRUGO, tpm_show_active, NULL);
+static DEVICE_ATTR(owned, S_IRUGO, tpm_show_owned, NULL);
+static DEVICE_ATTR(temp_deactivated, S_IRUGO, tpm_show_temp_deactivated, NULL);
+static DEVICE_ATTR(caps, S_IRUGO, tpm_show_caps_1_2, NULL);
+static DEVICE_ATTR(cancel, S_IWUSR | S_IWGRP, NULL, tpm_store_cancel);
+static DEVICE_ATTR(durations, S_IRUGO, tpm_show_durations, NULL);
+static DEVICE_ATTR(timeouts, S_IRUGO, tpm_show_timeouts, NULL);
+
+static struct attribute *tis_attrs[] = {
+	&dev_attr_pubek.attr,
+	&dev_attr_pcrs.attr,
+	&dev_attr_enabled.attr,
+	&dev_attr_active.attr,
+	&dev_attr_owned.attr,
+	&dev_attr_temp_deactivated.attr,
+	&dev_attr_caps.attr,
+	&dev_attr_cancel.attr,
+	&dev_attr_durations.attr,
+	&dev_attr_timeouts.attr,
+	NULL,
+};
+
+static struct attribute_group tis_attr_grp = {
+	.attrs = tis_attrs
+};
+
+static struct tpm_vendor_specific tpm_tis_i2c = {
+	.status = tpm_tis_i2c_status,
+	.recv = tpm_tis_i2c_recv,
+	.send = tpm_tis_i2c_send,
+	.cancel = tpm_tis_i2c_ready,
+	//.req_complete_mask = TPM_STS_DATA_AVAIL | TPM_STS_VALID,
+	//.req_complete_val = TPM_STS_DATA_AVAIL | TPM_STS_VALID,
+	//.req_canceled = TPM_STS_COMMAND_READY,
+	.attr_group = &tis_attr_grp,
+	.miscdev.fops = &tis_ops,
 };
 
 static struct i2c_device_id tpm_tis_i2c_table[] = {
@@ -229,6 +282,20 @@ static int __devinit tpm_tis_i2c_probe (struct i2c_client *client,
 
 static int __devexit tpm_tis_i2c_remove(struct i2c_client *client)
 {
+	struct tpm_chip *chip = tpm_dev.chip;
+
+	/* close file handles */
+	tpm_dev_vendor_release(chip);
+	/* remove hardware */
+	tpm_remove_hardware(chip->dev);
+
+	/* reset pointers */
+	chip->dev->release = NULL;
+	chip->release = NULL;
+	tpm_dev.client = NULL;
+
+	//dev_set_drvdata(chip->dev, chip);
+
 	return 0;
 }
 
@@ -237,6 +304,10 @@ static int __devinit tpm_tis_i2c_init (void)
 	int rc;
 	struct i2c_adapter *adapter;
 	struct i2c_board_info info;
+	struct tpm_chip *chip;
+
+	if (tpm_dev.client != NULL)
+		return -EBUSY /* only support one TPM */
 
 	rc = i2c_add_driver(&tpm_tis_i2c_driver);
 	if (rc) {
@@ -244,41 +315,47 @@ static int __devinit tpm_tis_i2c_init (void)
 		return rc;
 	}
 
-	adapter = i2c_get_adapter(0x03); /* beaglebone specific */
+	adapter = i2c_get_adapter(I2C_BUS_ID); /* beaglebone specific */
 	if (!adapter) {
 		printk (KERN_INFO "tpm_i2c_atmel: failed to get adapter.");
 		i2c_del_driver(&tpm_tis_i2c_driver);
-		rc = -ENODEV;
-		return rc;
+		return -ENODEV;
 	}
 
-	info.addr = 0x29; /* in atmel documentation */
+	info.addr = ATMEL_I2C_ID; /* in atmel documentation */
 	strlcpy(info.type, "tpm_i2c_atmel", I2C_NAME_SIZE);
-	tpm_dev.client = i2c_new_device(adapter, &info);
+	tpm_dev.client = i2c_new_deivce(adapter, &info);
 
 	if (!tpm_dev.client) {
 		printk (KERN_INFO "tpm_i2c_atmel: failed to create client.");
 		i2c_del_driver(&tpm_tis_i2c_driver);
-		/* why no ret change to -ENODEV? */
-		return rc;
+		return -ENODEV;
 	}
 
 	/* interesting */
 	i2c_put_adapter(adapter);
 
-	rc = misc_register(&tis_device);
-	if (rc) {
-		printk (KERN_INFO "tpm_i2c_atmel: failed to creat misc device.");
-		return rc;
+	tpm_dev.client->driver = &tpm_tis_i2c_driver;
+	chip = tpm_register_hardware(tpm_dev.client->dev, &tpm_tis_i2c);
+
+	if (!chip) {
+		i2c_del_driver(&tpm_tis_i2c_driver);
+		return -ENODEV;
 	}
 
+	/* required, may not be done by u-boot */
+	tpm_dev.chip = chip;
+	tpm_do_selftest(chip);
 	memset(tpm_dev.buf, 0x00, TPM_BUFSIZE);
+
 	return rc;
 }
 
-static void __devexit tpm_tis_i2c_exit (void) {
-	misc_deregister(&tis_device);
-	i2c_unregister_device(tpm_dev.client);
+static void __devexit tpm_tis_i2c_exit (void)
+{
+	if (tpm_dev.client != NULL) {
+		i2c_unregister_device(tpm_dev.client);
+	}
 	i2c_del_driver(&tpm_tis_i2c_driver);
 	printk (KERN_INFO "tpm_tis_atmel: removed i2c driver.");
 }
