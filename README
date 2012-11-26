@@ -1,0 +1,23 @@
+ATMEL's AT97SC3204T I2C TPM -- Linux Kernel Driver
+
+Instructions:
+
+0. Purchase a Beaglebone rev A5+.
+1. Install an ARMv7 cross compiler, update the Makefile with the location. See: 
+	http://prosauce.org/blog/2012/7/5/embedded-trust-p1-beginning-to-trust-my-beaglebone.html
+	for help on building your own.
+2. Compile a 3.0 (tested on 3.2) Linux kernel and a compatible u-boot, 
+	update the Makefile with the location of the source, also see above link.
+3. make
+4. Copy the .ko to the Beaglebone: insmod ./tpm_i2c_atmel.ko
+
+The TPM will need initialization; TrouSerS's tpm_tools can do this from userspace.
+
+0. git clone git://trousers.git.sourceforge.net/gitroot/trousers/trousers
+1. git clone git://trousers.git.sourceforge.net/gitroot/trousers/tpm-tools
+2. Follow the directions for both, tpm-tools depends on TrouSerS.
+3. ./tpm-tools/src/tpm_mgmt/tpm_startup
+
+Note: newer versions of the Linux Kernel support TPM initialization and self test.
+Note: The bbone-target-config.ccxml is from the Beaglebone website:
+	http://beagleboard.org/static/beaglebone/latest/Docs/ccs-jtag-simple.htm

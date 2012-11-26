@@ -40,17 +40,12 @@
 #include <linux/i2c.h>
 #include <generated/asm/errno.h>
 
-#include <linux/miscdevice.h>
-#include <linux/fs.h>
-#include <asm/uaccess.h>
-#include <linux/delay.h>
-
 #include "tpm.h"
 
 /* second i2c bus on BeagleBone with >=3.2 kernel */
 #define I2C_BUS_ID 0x03
 /* Atmel-defined I2C bus ID */
-#define ATMEL_I2C_ID 0x29
+#define ATMEL_I2C_TPM_ID 0x29
 
 /** Found in AVR code and in Max's implementation **/
 #define TPM_BUFSIZE 1024
@@ -299,7 +294,7 @@ static int __devinit tpm_tis_i2c_init (void)
 
 	/* could call probe here */
 
-	adapter = i2c_get_adapter(0x03); /* beaglebone specific */
+	adapter = i2c_get_adapter(I2C_BUS_ID); /* beaglebone specific */
 	if (!adapter) {
 		printk (KERN_INFO "tpm_i2c_atmel: failed to get adapter.");
 		i2c_del_driver(&tpm_tis_i2c_driver);
@@ -307,7 +302,7 @@ static int __devinit tpm_tis_i2c_init (void)
 	}
 
 	memset(&info, 0, sizeof(info));
-	info.addr = 0x29; /* in atmel documentation */
+	info.addr = ATMEL_I2C_TPM_ID; /* in atmel documentation */
 	strlcpy(info.type, "tpm_i2c_atmel", I2C_NAME_SIZE);
 
 	tpm_dev.client = i2c_new_device(adapter, &info);
