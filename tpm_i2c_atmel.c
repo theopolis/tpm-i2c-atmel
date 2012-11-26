@@ -5,7 +5,7 @@
  * Copyright (C) 2012 V Lab Technologies
  *
  * Authors:
- * Teddy Reed <teddy.reed@gmail.com>
+ * Teddy Reed <teddy@prosauce.org>
  *
  * Device driver for TCG/TCPA TPM (trusted platform module).
  * Specifications at www.trustedcomputinggroup.org
@@ -46,7 +46,6 @@
 #include <linux/delay.h>
 
 #include "tpm.h"
-#include "tpm_i2c.h"
 
 /* second i2c bus on BeagleBone with >=3.2 kernel */
 #define I2C_BUS_ID 0x03
@@ -68,11 +67,9 @@ static struct i2c_driver tpm_tis_i2c_driver;
 static u8 tpm_i2c_read(u8 *buffer, size_t len);
 
 static void tpm_tis_i2c_ready (struct tpm_chip *chip);
-static void tpm_tis_i2c_status (struct tpm_chip *chip);
+static u8 tpm_tis_i2c_status (struct tpm_chip *chip);
 static int tpm_tis_i2c_recv (struct tpm_chip *chip, u8 *buf, size_t count);
 static int tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count);
-static int tpm_tis_i2c_open (struct inode *inode, struct file *pfile);
-static int tpm_tis_i2c_release (struct inode *inode, struct file *pfile);
 
 static int __devinit tpm_tis_i2c_probe (struct i2c_client *client, const struct i2c_device_id *id);
 static int __devexit tpm_tis_i2c_remove (struct i2c_client *client);
@@ -92,7 +89,7 @@ static u8 tpm_i2c_read(u8 *buffer, size_t len)
 	/** should lock the device **/
 	if (!tpm_dev.client->adapter->algo->master_xfer)
 		return -EOPNOTSUPP;
-	i2c_lock_adapter(tpm_dev.client->adapter);
+	//i2c_lock_adapter(tpm_dev.client->adapter);
 
 	//printk(KERN_INFO "tpm_i2c_atmel: read length requested %i\n", len);
 
@@ -105,7 +102,7 @@ static u8 tpm_i2c_read(u8 *buffer, size_t len)
 	} while (trapdoor < trapdoor_limit);
 
 	/** should unlock device **/
-	i2c_unlock_adapter(tpm_dev.client->adapter);
+	//i2c_unlock_adapter(tpm_dev.client->adapter);
 
 	/** failed to read **/
 	if (trapdoor >= trapdoor_limit)
@@ -118,8 +115,6 @@ static int tpm_tis_i2c_recv (struct tpm_chip *chip, u8 *buf, size_t count)
 {
 	int rc = 0;
 	int expected;
-
-	//printk(KERN_INFO "tpm_i2c_atmel: read count %i\n", count);
 
 	memset(tpm_dev.buf, 0x00, TPM_BUFSIZE);
 	rc = tpm_i2c_read(tpm_dev.buf, TPM_HEADER_SIZE); /* returns status of read */
@@ -143,9 +138,7 @@ static int tpm_tis_i2c_recv (struct tpm_chip *chip, u8 *buf, size_t count)
 	rc = tpm_i2c_read(tpm_dev.buf, expected);
 
 to_user:
-	if (copy_to_user(buf, tpm_dev.buf, expected)) {
-		return -EFAULT;
-	}
+	memcpy(buf, tpm_dev.buf, expected);
 
 	//printk(KERN_INFO "tpm_i2c_atmel: read finished\n");
 
@@ -164,12 +157,10 @@ static int tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count)
 		return -EINVAL;
 	}
 
-	/** should lock the device
-	 * **/
+
+	/** should lock the device **/
 	memset(tpm_dev.buf, 0x00, TPM_BUFSIZE);
-	if (copy_from_user(tpm_dev.buf, buf, count)) {
-		return -EFAULT;
-	}
+	memcpy(tpm_dev.buf, buf, count);
 
 	rc = i2c_transfer(tpm_dev.client->adapter, &msg1, 1);
 
@@ -184,7 +175,7 @@ static int tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count)
 
 static u8 tpm_tis_i2c_status (struct tpm_chip *chip)
 {
-	return 0; /* timeout */
+	return 1; /* not a timeout */
 }
 
 static void tpm_tis_i2c_ready (struct tpm_chip *chip)
@@ -192,23 +183,13 @@ static void tpm_tis_i2c_ready (struct tpm_chip *chip)
 	//nothing
 }
 
-static int tpm_tis_i2c_open (struct inode *inode, struct file *pfile)
-{
-	return 0;
-}
-
-static int tpm_tis_i2c_release (struct inode *inode, struct file *pfile)
-{
-	return 0;
-}
-
 static const struct file_operations tis_ops = {
 	.owner = THIS_MODULE,
 	.llseek = no_llseek,
-	.open = tpm_tis_i2c_open,
+	.open = tpm_open,
 	.read = tpm_read,
 	.write = tpm_write,
-	.release = tpm_tis_i2c_release,
+	.release = tpm_release,
 };
 
 static DEVICE_ATTR(pubek, S_IRUGO, tpm_show_pubek, NULL);
@@ -272,6 +253,7 @@ static int __devinit tpm_tis_i2c_probe (struct i2c_client *client,
 {
 	int rc;
 
+	/* not a good implementation, will match any i2c device that responds. */
 	rc = i2c_smbus_read_byte(client);
 	if (rc < 0x00) {
 		return -ENODEV;
@@ -307,24 +289,30 @@ static int __devinit tpm_tis_i2c_init (void)
 	struct tpm_chip *chip;
 
 	if (tpm_dev.client != NULL)
-		return -EBUSY /* only support one TPM */
+		return -EBUSY; /* only support one TPM */
 
 	rc = i2c_add_driver(&tpm_tis_i2c_driver);
 	if (rc) {
-		printk (KERN_INFO "tpm_i2c_atmel: driver failue.");
+		printk (KERN_INFO "tpm_i2c_atmel: driver failure.");
 		return rc;
 	}
 
-	adapter = i2c_get_adapter(I2C_BUS_ID); /* beaglebone specific */
+	/* could call probe here */
+
+	adapter = i2c_get_adapter(0x03); /* beaglebone specific */
 	if (!adapter) {
 		printk (KERN_INFO "tpm_i2c_atmel: failed to get adapter.");
 		i2c_del_driver(&tpm_tis_i2c_driver);
 		return -ENODEV;
 	}
 
-	info.addr = ATMEL_I2C_ID; /* in atmel documentation */
+	memset(&info, 0, sizeof(info));
+	info.addr = 0x29; /* in atmel documentation */
 	strlcpy(info.type, "tpm_i2c_atmel", I2C_NAME_SIZE);
-	tpm_dev.client = i2c_new_deivce(adapter, &info);
+
+	tpm_dev.client = i2c_new_device(adapter, &info);
+
+	printk (KERN_INFO "tpm_i2c_atmel: test 1");
 
 	if (!tpm_dev.client) {
 		printk (KERN_INFO "tpm_i2c_atmel: failed to create client.");
@@ -335,8 +323,12 @@ static int __devinit tpm_tis_i2c_init (void)
 	/* interesting */
 	i2c_put_adapter(adapter);
 
+	printk (KERN_INFO "tpm_i2c_atmel: test 1");
+
 	tpm_dev.client->driver = &tpm_tis_i2c_driver;
-	chip = tpm_register_hardware(tpm_dev.client->dev, &tpm_tis_i2c);
+	chip = tpm_register_hardware(&tpm_dev.client->dev, &tpm_tis_i2c);
+
+	printk (KERN_INFO "tpm_i2c_atmel: test 1");
 
 	if (!chip) {
 		i2c_del_driver(&tpm_tis_i2c_driver);
@@ -345,8 +337,10 @@ static int __devinit tpm_tis_i2c_init (void)
 
 	/* required, may not be done by u-boot */
 	tpm_dev.chip = chip;
-	tpm_do_selftest(chip);
+	//tpm_do_selftest(chip);
 	memset(tpm_dev.buf, 0x00, TPM_BUFSIZE);
+
+	printk (KERN_INFO "tpm_i2c_atmel: test 1");
 
 	return rc;
 }
@@ -357,12 +351,12 @@ static void __devexit tpm_tis_i2c_exit (void)
 		i2c_unregister_device(tpm_dev.client);
 	}
 	i2c_del_driver(&tpm_tis_i2c_driver);
-	printk (KERN_INFO "tpm_tis_atmel: removed i2c driver.");
+	printk (KERN_INFO "tpm_i2c_atmel: removed i2c driver.");
 }
 
 module_init(tpm_tis_i2c_init);
 module_exit(tpm_tis_i2c_exit);
 
-MODULE_AUTHOR("Teddy Reed <teddy.reed@gmail.com");
+MODULE_AUTHOR("Teddy Reed <teddy@prosauce.org>");
 MODULE_DESCRIPTION("Driver for ATMEL's AT97SC3204T I2C TPM on Beaglebone rev A5");
 MODULE_LICENSE("GPL");
