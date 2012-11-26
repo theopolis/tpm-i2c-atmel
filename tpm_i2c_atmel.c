@@ -82,6 +82,7 @@ static u8 tpm_i2c_read(u8 *buffer, size_t len)
 	struct i2c_msg msg1 = { tpm_dev.client->addr, I2C_M_RD, len, buffer };
 
 	/** should lock the device **/
+	/** locking is hanging the I2C bus **/
 	if (!tpm_dev.client->adapter->algo->master_xfer)
 		return -EOPNOTSUPP;
 	//i2c_lock_adapter(tpm_dev.client->adapter);
@@ -154,7 +155,10 @@ static int tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count)
 
 
 	/** should lock the device **/
+	/** locking is hanging the I2C bus **/
+
 	memset(tpm_dev.buf, 0x00, TPM_BUFSIZE);
+	/* should add sanitization */
 	memcpy(tpm_dev.buf, buf, count);
 
 	rc = i2c_transfer(tpm_dev.client->adapter, &msg1, 1);
@@ -178,6 +182,7 @@ static void tpm_tis_i2c_ready (struct tpm_chip *chip)
 	//nothing
 }
 
+/* from Infineon driver */
 static const struct file_operations tis_ops = {
 	.owner = THIS_MODULE,
 	.llseek = no_llseek,
@@ -227,6 +232,7 @@ static struct tpm_vendor_specific tpm_tis_i2c = {
 	.attr_group = &tis_attr_grp,
 	.miscdev.fops = &tis_ops,
 };
+/* end from Infineon */
 
 static struct i2c_device_id tpm_tis_i2c_table[] = {
 		{ "tpm_i2c_atmel", 0 },
@@ -307,8 +313,6 @@ static int __devinit tpm_tis_i2c_init (void)
 
 	tpm_dev.client = i2c_new_device(adapter, &info);
 
-	printk (KERN_INFO "tpm_i2c_atmel: test 1");
-
 	if (!tpm_dev.client) {
 		printk (KERN_INFO "tpm_i2c_atmel: failed to create client.");
 		i2c_del_driver(&tpm_tis_i2c_driver);
@@ -318,12 +322,8 @@ static int __devinit tpm_tis_i2c_init (void)
 	/* interesting */
 	i2c_put_adapter(adapter);
 
-	printk (KERN_INFO "tpm_i2c_atmel: test 1");
-
 	tpm_dev.client->driver = &tpm_tis_i2c_driver;
 	chip = tpm_register_hardware(&tpm_dev.client->dev, &tpm_tis_i2c);
-
-	printk (KERN_INFO "tpm_i2c_atmel: test 1");
 
 	if (!chip) {
 		i2c_del_driver(&tpm_tis_i2c_driver);
@@ -334,8 +334,6 @@ static int __devinit tpm_tis_i2c_init (void)
 	tpm_dev.chip = chip;
 	//tpm_do_selftest(chip);
 	memset(tpm_dev.buf, 0x00, TPM_BUFSIZE);
-
-	printk (KERN_INFO "tpm_i2c_atmel: test 1");
 
 	return rc;
 }

@@ -21,3 +21,4 @@ The TPM will need initialization; TrouSerS's tpm_tools can do this from userspac
 Note: newer versions of the Linux Kernel support TPM initialization and self test.
 Note: The bbone-target-config.ccxml is from the Beaglebone website:
 	http://beagleboard.org/static/beaglebone/latest/Docs/ccs-jtag-simple.htm
+
