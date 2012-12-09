@@ -43,7 +43,7 @@
 #include "tpm.h"
 
 /* second i2c bus on BeagleBone with >=3.2 kernel */
-#define I2C_BUS_ID 0x03
+#define I2C_BUS_ID 0x02
 /* Atmel-defined I2C bus ID */
 #define ATMEL_I2C_TPM_ID 0x29
 

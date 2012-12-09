@@ -1,0 +1,10 @@
+--- linux/arch/arm/mach-omap2/board-am335xevm.c	2012-12-09 01:38:35.498257206 -0800
++++ default-linux/arch/arm/mach-omap2/board-am335xevm.c	2012-12-09 01:31:34.632893600 -0800
+@@ -3856,7 +3856,6 @@ static struct evm_dev_cfg beaglebone_old
+ /* Beaglebone Rev A3 and after */
+ static struct evm_dev_cfg beaglebone_dev_cfg[] = {
+ 	{tps65217_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+-	{i2c1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+ 	{i2c2_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+ 	{mii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
+ 	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
