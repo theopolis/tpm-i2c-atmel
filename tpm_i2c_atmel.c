@@ -38,7 +38,7 @@
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/i2c.h>
-#include <generated/asm/errno.h>
+#include <asm-generic/errno.h>
 
 #include "tpm.h"
 
@@ -82,12 +82,10 @@ static u8 tpm_i2c_read(u8 *buffer, size_t len)
 	struct i2c_msg msg1 = { tpm_dev.client->addr, I2C_M_RD, len, buffer };
 
 	/** should lock the device **/
-	/** locking is hanging the I2C bus **/
+	/** locking is performed by the i2c_transfer function **/
+
 	if (!tpm_dev.client->adapter->algo->master_xfer)
 		return -EOPNOTSUPP;
-	//i2c_lock_adapter(tpm_dev.client->adapter);
-
-	//printk(KERN_INFO "tpm_i2c_atmel: read length requested %i\n", len);
 
 	do {
 		rc = i2c_transfer(tpm_dev.client->adapter, &msg1, 1);
@@ -96,9 +94,6 @@ static u8 tpm_i2c_read(u8 *buffer, size_t len)
 		trapdoor++;
 		msleep(5);
 	} while (trapdoor < trapdoor_limit);
-
-	/** should unlock device **/
-	//i2c_unlock_adapter(tpm_dev.client->adapter);
 
 	/** failed to read **/
 	if (trapdoor >= trapdoor_limit)
@@ -111,22 +106,21 @@ static int tpm_tis_i2c_recv (struct tpm_chip *chip, u8 *buf, size_t count)
 {
 	int rc = 0;
 	int expected;
+#ifdef EBUG
+	int i;
+#endif
 
 	memset(tpm_dev.buf, 0x00, TPM_BUFSIZE);
 	rc = tpm_i2c_read(tpm_dev.buf, TPM_HEADER_SIZE); /* returns status of read */
 
-	//expected = be32_to_cpu(*(__be32 *)(buf + 2));
 	expected = tpm_dev.buf[4];
 	expected = expected << 8;
 	expected += tpm_dev.buf[5]; /* should never be > TPM_BUFSIZE */
 
-	//printk(KERN_INFO "tpm_i2c_atmel: read expected %i\n", expected);
 	if (expected <= TPM_HEADER_SIZE) {
 		/* finished here */
 		goto to_user;
 	}
-
-	//printk(KERN_INFO "tpm_i2c_atmel: need to read %i\n", expected);
 
 	/* Looks like it reads the entire expected, into the base of the buffer (from Max's code).
 	 * The AVR development board reads and additional expected - TPM_HEADER_SIZE.
@@ -136,7 +130,16 @@ static int tpm_tis_i2c_recv (struct tpm_chip *chip, u8 *buf, size_t count)
 to_user:
 	memcpy(buf, tpm_dev.buf, expected);
 
-	//printk(KERN_INFO "tpm_i2c_atmel: read finished\n");
+#ifdef EBUG
+	printk(KERN_INFO "[TPM]: Read (%d) bytes:\n0: \t", expected);
+	for (i = 0; i < expected; ++i) {
+		printk("%x ", tpm_dev.buf[i]);
+		if ((i+1) % 20 == 0) {
+			printk("\n%d:\t ", i);
+		}
+	}
+	printk("\n");
+#endif
 
 	return expected;
 }
@@ -144,6 +147,9 @@ to_user:
 static int tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count)
 {
 	int rc;
+#ifdef EBUG
+	int i;
+#endif
 
 	/** Write to tpm_dev.buf, size count **/
 	struct i2c_msg msg1 = { tpm_dev.client->addr, 0, count, tpm_dev.buf };
@@ -153,19 +159,27 @@ static int tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count)
 		return -EINVAL;
 	}
 
-
 	/** should lock the device **/
-	/** locking is hanging the I2C bus **/
+	/** locking is performed by the i2c_transfer function **/
 
 	memset(tpm_dev.buf, 0x00, TPM_BUFSIZE);
 	/* should add sanitization */
 	memcpy(tpm_dev.buf, buf, count);
 
+#ifdef EBUG
+	printk(KERN_INFO "[TPM]: Send (%d) bytes:\n0: \t", count);
+	for (i = 0; i < count; ++i) {
+		printk("%x ", tpm_dev.buf[i]);
+		if ((i+1) % 20 == 0) {
+			printk("\n%d:\t ", i);
+		}
+	}
+	printk("\n");
+#endif
+
 	rc = i2c_transfer(tpm_dev.client->adapter, &msg1, 1);
 
-	//printk(KERN_INFO "tpm_i2c_atmel: write status %i\n", rc);
 
-	/** should unlock device **/
 	if (rc <= 0)
 		return -EIO;
 
@@ -179,7 +193,7 @@ static u8 tpm_tis_i2c_status (struct tpm_chip *chip)
 
 static void tpm_tis_i2c_ready (struct tpm_chip *chip)
 {
-	//nothing
+	/* nothing */
 }
 
 /* from Infineon driver */
@@ -226,9 +240,9 @@ static struct tpm_vendor_specific tpm_tis_i2c = {
 	.recv = tpm_tis_i2c_recv,
 	.send = tpm_tis_i2c_send,
 	.cancel = tpm_tis_i2c_ready,
-	//.req_complete_mask = TPM_STS_DATA_AVAIL | TPM_STS_VALID,
-	//.req_complete_val = TPM_STS_DATA_AVAIL | TPM_STS_VALID,
-	//.req_canceled = TPM_STS_COMMAND_READY,
+	/*.req_complete_mask = TPM_STS_DATA_AVAIL | TPM_STS_VALID,
+	.req_complete_val = TPM_STS_DATA_AVAIL | TPM_STS_VALID,
+	.req_canceled = TPM_STS_COMMAND_READY,*/
 	.attr_group = &tis_attr_grp,
 	.miscdev.fops = &tis_ops,
 };
@@ -277,8 +291,6 @@ static int __devexit tpm_tis_i2c_remove(struct i2c_client *client)
 	chip->release = NULL;
 	tpm_dev.client = NULL;
 
-	//dev_set_drvdata(chip->dev, chip);
-
 	return 0;
 }
 
@@ -300,7 +312,7 @@ static int __devinit tpm_tis_i2c_init (void)
 
 	/* could call probe here */
 
-	adapter = i2c_get_adapter(I2C_BUS_ID); /* beaglebone specific */
+	adapter = i2c_get_adapter(I2C_BUS_ID); /* BeagleBone specific */
 	if (!adapter) {
 		printk (KERN_INFO "tpm_i2c_atmel: failed to get adapter.");
 		i2c_del_driver(&tpm_tis_i2c_driver);
@@ -308,7 +320,7 @@ static int __devinit tpm_tis_i2c_init (void)
 	}
 
 	memset(&info, 0, sizeof(info));
-	info.addr = ATMEL_I2C_TPM_ID; /* in atmel documentation */
+	info.addr = ATMEL_I2C_TPM_ID; /* in Atmel documentation */
 	strlcpy(info.type, "tpm_i2c_atmel", I2C_NAME_SIZE);
 
 	tpm_dev.client = i2c_new_device(adapter, &info);
@@ -330,9 +342,12 @@ static int __devinit tpm_tis_i2c_init (void)
 		return -ENODEV;
 	}
 
+	printk(KERN_INFO "tpm_i2c_atmel: registered Atmel TPM.");
+
 	/* required, may not be done by u-boot */
+	/* issue tpm_startup, tpm_selftest */
+
 	tpm_dev.chip = chip;
-	//tpm_do_selftest(chip);
 	memset(tpm_dev.buf, 0x00, TPM_BUFSIZE);
 
 	return rc;
