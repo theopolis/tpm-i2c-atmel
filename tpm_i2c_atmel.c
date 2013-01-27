@@ -24,7 +24,6 @@
  * License.
  */
 
-#include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
@@ -35,6 +34,11 @@
 
 /** Found in AVR code and in Max's implementation **/
 #define TPM_BUFSIZE 1024
+
+/* Not included in older tpm.h */
+#ifndef TPM_HEADER_SIZE
+#define TPM_HEADER_SIZE 10
+#endif
 
 struct tpm_i2c_atmel_dev {
 	struct i2c_client *client;
@@ -54,9 +58,12 @@ static int 	tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count);
 
 static int __devinit tpm_tis_i2c_probe (struct i2c_client *client, const struct i2c_device_id *id);
 static int __devexit tpm_tis_i2c_remove (struct i2c_client *client);
-static int __devinit tpm_tis_i2c_init (void);
-static void __devexit tpm_tis_i2c_exit (void);
+static int __devinit tpm_tis_i2c_init (struct device *dev);
 
+enum tis_defaults {
+	TIS_SHORT_TIMEOUT = 750,	/* ms */
+	TIS_LONG_TIMEOUT = 2000,	/* 2 sec */
+};
 
 static u8 tpm_i2c_read(u8 *buffer, size_t len)
 {
@@ -210,15 +217,28 @@ static struct i2c_device_id tpm_tis_i2c_table[] = {
 		{ }
 };
 
+MODULE_DEVICE_TABLE(i2c, tpm_tis_i2c_table);
+
 static int __devinit tpm_tis_i2c_probe (struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
 	int rc;
 
-	/* not a good implementation, will match any i2c device that responds. */
-	rc = i2c_smbus_read_byte(client);
-	if (rc < 0x00) {
+	if (tpm_dev.client != NULL)
+		return -EBUSY; /* only 1 TPM per-system */
+
+	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+		dev_err(&client->dev, "no algorithms associated to i2c bus\n");
 		return -ENODEV;
+	}
+
+	client->driver = &tpm_tis_i2c_driver;
+	tpm_dev.client = client;
+	rc = tpm_tis_i2c_init(&client->dev);
+	if (rc != 0) {
+		client->driver = NULL;
+		tpm_dev.client = NULL;
+		rc = -ENODEV;
 	}
 
 	return rc;
@@ -237,7 +257,7 @@ static int __devexit tpm_tis_i2c_remove(struct i2c_client *client)
 	chip->dev->release = NULL;
 	chip->release = NULL;
 	tpm_dev.client = NULL;
-	dev_set_drvdata(chil->dev, chip);
+	dev_set_drvdata(chip->dev, chip);
 
 	return 0;
 }

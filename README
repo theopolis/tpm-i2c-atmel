@@ -2,30 +2,46 @@ ATMEL's AT97SC3204T I2C TPM -- Linux Kernel Driver
 
 Instructions (Kernel):
 ======================
+The following few steps will add the I2C TPM as a tristate in drivers/char/tpm.
+You will need to configure your board to include the TPM on the correct I2C bus. 
+Atmel's I2C TPM has an address of 0x29. You can add: 
+  { I2C_BOARD_INFO("tpm_i2c_atmel", 0x29), }
+to the i2c_board_info struct used by the I2C bus.
 
 0. Patch your system board to include "tpm_i2c_atmel" with the I2C bus and address
-   of the TPM. (See patches/bb-ra5-add-tpm.patch.)
-1. Patch the kernel to add support for the TPM using './patch_kernel.sh /kernel/source'. 
-   This moves the source into drivers/char/tpm, and adds support to Kconfig, Makefile
+   of the TPM. 
+1. Insert support for the TPM:
+   [tpm-i2c-atmel] $ bash ./patch_kernel.sh /kernel/source 
+   This moves the source into drivers/char/tpm, and adds support to Kconfig & Makefile
 2. Add your preference for CONFIG_TCG_TIS_I2C_ATMEL.
 3. Compile your kernel
 
-Beaglebone (Module):
-====================
+Beaglebone (A5+) (Kernel):
+==========================
+For a BeagleBone, in addition to the above steps, there are two included patches
+to (1) enable the I2C-2 bus, and (2) add the I2C TPM at address 0x29 on I2C-2.
 
-0. Purchase a Beaglebone rev A5+.
-1. Install an ARMv7 cross compiler, update the Makefile with the location. See: 
-   http://prosauce.org/blog/2012/7/5/embedded-trust-p1-beginning-to-trust-my-beaglebone.html 
-   for help on building your own.
-2. Compile a 3.0 (tested on 3.2) Linux kernel and a compatible u-boot, 
-   update the Makefile with the location of the source, also see above link.
-2.1 Patch you're board-am335xevm.c using patches/bb-ra5-add-i2c1.patch.
-   [kernel-dir] $ patch -p1 < /loc/of/patches/bb-ra5-add-i2c1.patch
-   This will enable the i2c-2 bus. The BB spec identifies i2c-2 for use with
+0. Follow the above
+1. Apply patches:
+   [kernel-dir] $ patch -p0 < /tpm-i2c-atmel/patches/bb-ra5-add-i2c1.patch
+   [kernel-dir] $ patch -p0 < /tpm-i2c-atmel/patches/bb-ra5-add-tpm-i2c-atmel.patch
+
+Beaglebone (A5+) (Module):
+==========================
+If you would like the Atmel I2C TPM driver as a module built outside of the kernel
+you can checkout the beaglebone branch and modify tpm_i2c_atmel.c to specify the 
+I2C bus and address (though should not change).
+
+0. (Optional) Patch your board-am335xevm.c using patches/bb-ra5-add-i2c1.patch.
+   [kernel-dir] $ patch -p0 < /tpm-i2c-atmel/bb-ra5-add-i2c1.patch
+   This will enable the I2C-2 bus. The BeagleBone SRM identifies I2C-2 for use with
    peripherals. 
 3. git checkout -b beaglebone beaglebone
 4. KERNEL_DIR=/location CROSS_COMPILER=/location/bin/arm-linux- make
-5. Copy the .ko to the Beaglebone: insmod ./tpm_i2c_atmel.ko
+5. Copy the .ko to the BeagleBone: insmod ./tpm_i2c_atmel.ko
+
+Other:
+======
 
 The TPM will need initialization; TrouSerS's tpm_tools can do this from userspace.
 
@@ -34,12 +50,7 @@ The TPM will need initialization; TrouSerS's tpm_tools can do this from userspac
 2. Follow the directions for both, tpm-tools depends on TrouSerS.
 3. ./tpm-tools/src/tpm_mgmt/tpm_startup
 
-Other:
-======
-
 Note: newer versions of the Linux Kernel support TPM initialization and self test.
   We expect U-boot to have issued a startup and self test, similar to platforms 
   implementing TPM in BIOS.
-Note: The bbone-target-config.ccxml is from the Beaglebone website:
-  http://beagleboard.org/static/beaglebone/latest/Docs/ccs-jtag-simple.htm
 

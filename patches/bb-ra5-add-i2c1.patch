@@ -1,5 +1,5 @@
---- KERNEL/arch/arm/mach-omap2/board-am335xevm.c	2012-12-28 21:48:04.876515045 -0800
-+++ KERNEL-mod/arch/arm/mach-omap2/board-am335xevm.c	2012-12-28 21:51:25.468127243 -0800
+--- arch/arm/mach-omap2/board-am335xevm.c	2012-12-28 21:48:04.876515045 -0800
++++ arch/arm/mach-omap2/board-am335xevm.c	2012-12-28 21:51:25.468127243 -0800
 @@ -3858,6 +3858,7 @@
  /* Beaglebone Rev A3 and after */
  static struct evm_dev_cfg beaglebone_dev_cfg[] = {

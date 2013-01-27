@@ -42,3 +42,5 @@ else
 	sed "$((LAST_LINE-1))r patches/Kconfig.add" < $1/drivers/char/tpm/Kconfig > Kconfig.mod
 	mv Kconfig.mod $1/drivers/char/tpm/Kconfig
 fi
+
+echo "Success"
