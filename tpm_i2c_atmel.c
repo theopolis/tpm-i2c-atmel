@@ -24,15 +24,6 @@
  * License.
  */
 
-/*
- * Optional board info modification (am335-evm)
- * i2c2 on Beaglebone for 3.2.0 kernel is bus: i2c-3
-		static struct i2c_board_info __initdata beagle_i2c_devices[] = {
-			{ I2C_BOARD_INFO("tpm_i2c_atmel", 0x29), }
-		};
- * This module has the i2c bus and device location including during init.
- */
-
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/module.h>
@@ -41,11 +32,6 @@
 #include <asm-generic/errno.h>
 
 #include "tpm.h"
-
-/* second i2c bus on BeagleBone with >=3.2 kernel */
-#define I2C_BUS_ID 0x02
-/* Atmel-defined I2C bus ID */
-#define ATMEL_I2C_TPM_ID 0x29
 
 /** Found in AVR code and in Max's implementation **/
 #define TPM_BUFSIZE 1024
@@ -59,12 +45,12 @@ struct tpm_i2c_atmel_dev {
 struct tpm_i2c_atmel_dev tpm_dev;
 static struct i2c_driver tpm_tis_i2c_driver;
 
-static u8 tpm_i2c_read(u8 *buffer, size_t len);
+static u8 	tpm_i2c_read(u8 *buffer, size_t len);
 
 static void tpm_tis_i2c_ready (struct tpm_chip *chip);
-static u8 tpm_tis_i2c_status (struct tpm_chip *chip);
-static int tpm_tis_i2c_recv (struct tpm_chip *chip, u8 *buf, size_t count);
-static int tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count);
+static u8 	tpm_tis_i2c_status (struct tpm_chip *chip);
+static int 	tpm_tis_i2c_recv (struct tpm_chip *chip, u8 *buf, size_t count);
+static int 	tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count);
 
 static int __devinit tpm_tis_i2c_probe (struct i2c_client *client, const struct i2c_device_id *id);
 static int __devexit tpm_tis_i2c_remove (struct i2c_client *client);
@@ -106,9 +92,6 @@ static int tpm_tis_i2c_recv (struct tpm_chip *chip, u8 *buf, size_t count)
 {
 	int rc = 0;
 	int expected;
-#ifdef EBUG
-	int i;
-#endif
 
 	memset(tpm_dev.buf, 0x00, TPM_BUFSIZE);
 	rc = tpm_i2c_read(tpm_dev.buf, TPM_HEADER_SIZE); /* returns status of read */
@@ -130,26 +113,12 @@ static int tpm_tis_i2c_recv (struct tpm_chip *chip, u8 *buf, size_t count)
 to_user:
 	memcpy(buf, tpm_dev.buf, expected);
 
-#ifdef EBUG
-	printk(KERN_INFO "[TPM]: Read (%d) bytes:\n0: \t", expected);
-	for (i = 0; i < expected; ++i) {
-		printk("%x ", tpm_dev.buf[i]);
-		if ((i+1) % 20 == 0) {
-			printk("\n%d:\t ", i);
-		}
-	}
-	printk("\n");
-#endif
-
 	return expected;
 }
 
 static int tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count)
 {
 	int rc;
-#ifdef EBUG
-	int i;
-#endif
 
 	/** Write to tpm_dev.buf, size count **/
 	struct i2c_msg msg1 = { tpm_dev.client->addr, 0, count, tpm_dev.buf };
@@ -166,19 +135,7 @@ static int tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count)
 	/* should add sanitization */
 	memcpy(tpm_dev.buf, buf, count);
 
-#ifdef EBUG
-	printk(KERN_INFO "[TPM]: Send (%d) bytes:\n0: \t", count);
-	for (i = 0; i < count; ++i) {
-		printk("%x ", tpm_dev.buf[i]);
-		if ((i+1) % 20 == 0) {
-			printk("\n%d:\t ", i);
-		}
-	}
-	printk("\n");
-#endif
-
 	rc = i2c_transfer(tpm_dev.client->adapter, &msg1, 1);
-
 
 	if (rc <= 0)
 		return -EIO;
@@ -253,16 +210,6 @@ static struct i2c_device_id tpm_tis_i2c_table[] = {
 		{ }
 };
 
-static struct i2c_driver tpm_tis_i2c_driver = {
-	.driver = {
-		.name = "tpm_i2c_atmel",
-		.owner = THIS_MODULE,
-	},
-	.probe = tpm_tis_i2c_probe,
-	.remove = tpm_tis_i2c_remove, /* __devexit_p() */
-	.id_table = tpm_tis_i2c_table,
-};
-
 static int __devinit tpm_tis_i2c_probe (struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
@@ -290,81 +237,55 @@ static int __devexit tpm_tis_i2c_remove(struct i2c_client *client)
 	chip->dev->release = NULL;
 	chip->release = NULL;
 	tpm_dev.client = NULL;
+	dev_set_drvdata(chil->dev, chip);
 
 	return 0;
 }
 
-static int __devinit tpm_tis_i2c_init (void)
+static int __devinit tpm_tis_i2c_init (struct device *dev)
 {
-	int rc;
-	struct i2c_adapter *adapter;
-	struct i2c_board_info info;
+	int rc = 0;
 	struct tpm_chip *chip;
 
-	if (tpm_dev.client != NULL)
-		return -EBUSY; /* only support one TPM */
-
-	rc = i2c_add_driver(&tpm_tis_i2c_driver);
-	if (rc) {
-		printk (KERN_INFO "tpm_i2c_atmel: driver failure.");
-		return rc;
-	}
-
-	/* could call probe here */
-
-	adapter = i2c_get_adapter(I2C_BUS_ID); /* BeagleBone specific */
-	if (!adapter) {
-		printk (KERN_INFO "tpm_i2c_atmel: failed to get adapter.");
-		i2c_del_driver(&tpm_tis_i2c_driver);
-		return -ENODEV;
-	}
-
-	memset(&info, 0, sizeof(info));
-	info.addr = ATMEL_I2C_TPM_ID; /* in Atmel documentation */
-	strlcpy(info.type, "tpm_i2c_atmel", I2C_NAME_SIZE);
-
-	tpm_dev.client = i2c_new_device(adapter, &info);
-
-	if (!tpm_dev.client) {
-		printk (KERN_INFO "tpm_i2c_atmel: failed to create client.");
-		i2c_del_driver(&tpm_tis_i2c_driver);
-		return -ENODEV;
-	}
-
-	/* interesting */
-	i2c_put_adapter(adapter);
-
-	tpm_dev.client->driver = &tpm_tis_i2c_driver;
-	chip = tpm_register_hardware(&tpm_dev.client->dev, &tpm_tis_i2c);
-
+	chip = tpm_register_hardware(dev, &tpm_tis_i2c);
 	if (!chip) {
-		i2c_del_driver(&tpm_tis_i2c_driver);
 		return -ENODEV;
 	}
 
-	printk(KERN_INFO "tpm_i2c_atmel: registered Atmel TPM.");
+	/* Disable interrupts */
+	chip->vendor.irq = 0;
 
-	/* required, may not be done by u-boot */
-	/* issue tpm_startup, tpm_selftest */
+	/* Set default timeouts */
+	chip->vendor.timeout_a = msecs_to_jiffies(TIS_SHORT_TIMEOUT);
+	chip->vendor.timeout_b = msecs_to_jiffies(TIS_LONG_TIMEOUT);
+	chip->vendor.timeout_c = msecs_to_jiffies(TIS_SHORT_TIMEOUT);
+	chip->vendor.timeout_d = msecs_to_jiffies(TIS_SHORT_TIMEOUT);
+
+	/* The device responds to an unsolicited read with 0x1 0x2 0x3 ... */
+
+	dev_info(dev, "1.2 TPM");
 
 	tpm_dev.chip = chip;
 	memset(tpm_dev.buf, 0x00, TPM_BUFSIZE);
 
+	tpm_get_timeouts(chip);
+	/* tpm_do_selftest(chip); */
+
 	return rc;
 }
 
-static void __devexit tpm_tis_i2c_exit (void)
-{
-	if (tpm_dev.client != NULL) {
-		i2c_unregister_device(tpm_dev.client);
-	}
-	i2c_del_driver(&tpm_tis_i2c_driver);
-	printk (KERN_INFO "tpm_i2c_atmel: removed i2c driver.");
-}
+static struct i2c_driver tpm_tis_i2c_driver = {
+	.driver = {
+		.name = "tpm_i2c_atmel",
+		.owner = THIS_MODULE,
+	},
+	.probe = tpm_tis_i2c_probe,
+	.remove = tpm_tis_i2c_remove, /* __devexit_p() */
+	.id_table = tpm_tis_i2c_table,
+};
 
-module_init(tpm_tis_i2c_init);
-module_exit(tpm_tis_i2c_exit);
-
+module_i2c_driver(tpm_tis_i2c_driver);
 MODULE_AUTHOR("Teddy Reed <teddy@prosauce.org>");
-MODULE_DESCRIPTION("Driver for ATMEL's AT97SC3204T I2C TPM on Beaglebone rev A5");
+MODULE_DESCRIPTION("Driver for ATMEL's AT97SC3204T I2C TPM");
+MODULE_VERSION("1.1");
 MODULE_LICENSE("GPL");
