@@ -56,9 +56,9 @@ static u8 	tpm_tis_i2c_status (struct tpm_chip *chip);
 static int 	tpm_tis_i2c_recv (struct tpm_chip *chip, u8 *buf, size_t count);
 static int 	tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count);
 
-static int __devinit tpm_tis_i2c_probe (struct i2c_client *client, const struct i2c_device_id *id);
-static int __devexit tpm_tis_i2c_remove (struct i2c_client *client);
-static int __devinit tpm_tis_i2c_init (struct device *dev);
+static int tpm_tis_i2c_probe (struct i2c_client *client, const struct i2c_device_id *id);
+static int tpm_tis_i2c_remove (struct i2c_client *client);
+static int tpm_tis_i2c_init (struct device *dev);
 
 enum tis_defaults {
 	TIS_SHORT_TIMEOUT = 750,	/* ms */
@@ -219,7 +219,7 @@ static struct i2c_device_id tpm_tis_i2c_table[] = {
 
 MODULE_DEVICE_TABLE(i2c, tpm_tis_i2c_table);
 
-static int __devinit tpm_tis_i2c_probe (struct i2c_client *client,
+static int tpm_tis_i2c_probe (struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
 	int rc;
@@ -244,7 +244,7 @@ static int __devinit tpm_tis_i2c_probe (struct i2c_client *client,
 	return rc;
 }
 
-static int __devexit tpm_tis_i2c_remove(struct i2c_client *client)
+static int tpm_tis_i2c_remove(struct i2c_client *client)
 {
 	struct tpm_chip *chip = tpm_dev.chip;
 
@@ -262,7 +262,7 @@ static int __devexit tpm_tis_i2c_remove(struct i2c_client *client)
 	return 0;
 }
 
-static int __devinit tpm_tis_i2c_init (struct device *dev)
+static int tpm_tis_i2c_init (struct device *dev)
 {
 	int rc = 0;
 	struct tpm_chip *chip;
@@ -304,7 +304,22 @@ static struct i2c_driver tpm_tis_i2c_driver = {
 	.id_table = tpm_tis_i2c_table,
 };
 
-module_i2c_driver(tpm_tis_i2c_driver);
+static int __init tpm_tis_i2c_modinit(void)
+{
+	int rc = 0;
+
+	rc = i2c_add_driver(&tpm_tis_i2c_driver);
+	return rc;
+}
+
+static void __exit tpm_tis_i2c_exit(void)
+{
+	i2c_del_driver(&tpm_tis_i2c_driver);
+}
+
+module_init(tpm_tis_i2c_modinit);
+module_exit(tpm_tis_i2c_exit);
+
 MODULE_AUTHOR("Teddy Reed <teddy@prosauce.org>");
 MODULE_DESCRIPTION("Driver for ATMEL's AT97SC3204T I2C TPM");
 MODULE_VERSION("1.1");

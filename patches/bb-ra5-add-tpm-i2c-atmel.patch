@@ -5,7 +5,7 @@
  	},
  	{
 +		I2C_BOARD_INFO("tpm_i2c_atmel", 0x29),
-+	}
++	},
 +	{
  		I2C_BOARD_INFO("tsl2550", 0x39),
  	},
