@@ -1,0 +1,12 @@
+--- arch/arm/mach-omap2/board-am335xevm.c	2012-12-09 01:38:35.000000000 -0800
++++ arch/arm/mach-omap2/board-am335xevm.c.mod	2013-01-29 22:09:24.509579362 -0800
+@@ -2746,6 +2746,9 @@
+ 		.platform_data = &lis331dlh_pdata,
+ 	},
+ 	{
++		I2C_BOARD_INFO("tpm_i2c_atmel", 0x29),
++	},
++	{
+ 		I2C_BOARD_INFO("tsl2550", 0x39),
+ 	},
+ 	{

@@ -1,0 +1,37 @@
+--- arch/arm/boot/dts/am335x-bone-common.dtsi	2013-01-31 00:36:01.410403957 -0800
++++ arch/arm/boot/dts/am335x-bone-common-tpm.dtsi	2013-01-31 00:29:08.038423251 -0800
+@@ -28,8 +28,12 @@
+ 			pinctrl-single,pins = <
+ 				0x150 0x10      /* spi0_sclk.gpio0_2, OUTPUT_PULLUP | MODE0 */
+ 				0x154 0x30      /* spi0_d0.gpio0_3, INPUT_PULLUP | MODE0 */
+-				0x158 0x10      /* spi0_d1.i2c1_sda, OUTPUT_PULLUP | MODE0 */
+-				0x15c 0x10      /* spi0_cs0.i2c1_scl, OUTPUT_PULLUP | MODE0 */
++			>;
++		};
++		i2c1_pins: pinmux_i2c1_pins {
++			pinctrl-single,pins = <
++				0x158 0x72      /* spi0_d1.i2c1_sda, OUTPUT_PULLUP | MODE0 */
++				0x15c 0x72      /* spi0_cs0.i2c1_scl, OUTPUT_PULLUP | MODE0 */
+ 			>;
+ 		};
+ 		spi1_pins: pinmux_spi1_pins {
+@@ -363,6 +367,19 @@
+ 	};
+ };
+ 
++&i2c1 {
++	status = "okay";
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c1_pins>;
++
++	clock-frequency = <100000>;
++
++	tpm_i2c_atmel: tpm_i2c_atmel@29 {
++		compatible = "atmel,tpm_i2c_atmel";
++		reg = <0x29>;
++	};
++};
++
+ &i2c2 {
+ 	status = "okay";
+ 	pinctrl-names = "default";
