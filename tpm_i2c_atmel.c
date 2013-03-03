@@ -1,6 +1,5 @@
 /*
  * ATMEL I2C TPM AT97SC3204T
- * Beaglebone rev A5 Linux Driver (Kernel 3.2+)
  *
  * Copyright (C) 2012 V Lab Technologies
  *
@@ -13,10 +12,10 @@
  * This device driver implements the TPM interface as defined in
  * the TCG TPM Interface Spec version 1.2.
  *
- * It is based on the AVR code in ATMEL's AT90USB128 TPM Development Board,
- * the Linux Infineon TIS 12C TPM driver from Peter Huewe, the original tpm_tis
- * device driver from Leendert van Dorn and Kyleen Hall, and code provided from
- * ATMEL's Application Group, Crypto Products Division and Max R. May.
+ * It is based on the Linux Infineon TIS 12C TPM driver from Peter Huewe,
+ * the original tpm_tis device driver from Leendert van Dorn and Kyleen Hall,
+ * and code provided from Atmel's Application Group, Crypto Products Division
+ * and Max R. May.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -32,7 +31,7 @@
 
 #include "tpm.h"
 
-/** Found in AVR code and in Max's implementation **/
+/* Specific to Atmel I2C TPM */
 #define TPM_BUFSIZE 1024
 
 /* Not included in older tpm.h */
@@ -49,7 +48,7 @@ struct tpm_i2c_atmel_dev {
 struct tpm_i2c_atmel_dev tpm_dev;
 static struct i2c_driver tpm_tis_i2c_driver;
 
-static u8 	tpm_i2c_read(u8 *buffer, size_t len);
+static u8 	tpm_i2c_read(u8 *buffer, u16 len);
 
 static void tpm_tis_i2c_ready (struct tpm_chip *chip);
 static u8 	tpm_tis_i2c_status (struct tpm_chip *chip);
@@ -65,14 +64,19 @@ enum tis_defaults {
 	TIS_LONG_TIMEOUT = 2000,	/* 2 sec */
 };
 
-static u8 tpm_i2c_read(u8 *buffer, size_t len)
+static u8 tpm_i2c_read(u8 *buffer, u16 len)
 {
 	int rc;
 	u32 trapdoor = 0;
 	const u32 trapdoor_limit = 60000; /* 5min with base 5mil seconds */
 
 	/** Read into buffer, of size len **/
-	struct i2c_msg msg1 = { tpm_dev.client->addr, I2C_M_RD, len, buffer };
+	struct i2c_msg msg1 = {
+		.addr = tpm_dev.client->addr,
+		.flags = I2C_M_RD,
+		.len = len,
+		.buf = buffer
+	};
 
 	/** should lock the device **/
 	/** locking is performed by the i2c_transfer function **/
@@ -98,7 +102,7 @@ static u8 tpm_i2c_read(u8 *buffer, size_t len)
 static int tpm_tis_i2c_recv (struct tpm_chip *chip, u8 *buf, size_t count)
 {
 	int rc = 0;
-	int expected;
+	u16 expected;
 
 	memset(tpm_dev.buf, 0x00, TPM_BUFSIZE);
 	rc = tpm_i2c_read(tpm_dev.buf, TPM_HEADER_SIZE); /* returns status of read */
@@ -112,9 +116,7 @@ static int tpm_tis_i2c_recv (struct tpm_chip *chip, u8 *buf, size_t count)
 		goto to_user;
 	}
 
-	/* Looks like it reads the entire expected, into the base of the buffer (from Max's code).
-	 * The AVR development board reads and additional expected - TPM_HEADER_SIZE.
-	 */
+	/* Read again, the expected number of bytes */
 	rc = tpm_i2c_read(tpm_dev.buf, expected);
 
 to_user:
@@ -128,7 +130,12 @@ static int tpm_tis_i2c_send (struct tpm_chip *chip, u8 *buf, size_t count)
 	int rc;
 
 	/** Write to tpm_dev.buf, size count **/
-	struct i2c_msg msg1 = { tpm_dev.client->addr, 0, count, tpm_dev.buf };
+	struct i2c_msg msg1 = {
+		.addr = tpm_dev.client->addr,
+		.flags = 0,
+		.len = count,
+		.buf = tpm_dev.buf
+	};
 
 	rc = -EIO;
 	if (count > TPM_BUFSIZE) {
@@ -232,6 +239,12 @@ static int tpm_tis_i2c_probe (struct i2c_client *client,
 		return -ENODEV;
 	}
 
+	/* not a good implementation, will match any i2c device that responds. */
+	rc = i2c_smbus_read_byte(client);
+	if (rc < 0x00) {
+		return -ENODEV;
+	}
+
 	client->driver = &tpm_tis_i2c_driver;
 	tpm_dev.client = client;
 	rc = tpm_tis_i2c_init(&client->dev);
@@ -321,6 +334,6 @@ module_init(tpm_tis_i2c_modinit);
 module_exit(tpm_tis_i2c_exit);
 
 MODULE_AUTHOR("Teddy Reed <teddy@prosauce.org>");
-MODULE_DESCRIPTION("Driver for ATMEL's AT97SC3204T I2C TPM");
+MODULE_DESCRIPTION("Atmel AT97SC3204T I2C TPM");
 MODULE_VERSION("1.1");
 MODULE_LICENSE("GPL");

@@ -22,7 +22,7 @@ For a BeagleBone, in addition to the above steps, there are two included patches
 to (1) enable the I2C-2 bus, and (2) add the I2C TPM at address 0x29 on I2C-2.
 
 0. Follow the above
-1. Apply patches:
+1. Apply patches: (for Linux 3.7, only patch bb-ra5-add-tpm-i2c-atmel-3.7.patch)
    [kernel-dir] $ patch -p0 < /tpm-i2c-atmel/patches/bb-ra5-add-i2c1.patch
    [kernel-dir] $ patch -p0 < /tpm-i2c-atmel/patches/bb-ra5-add-tpm-i2c-atmel.patch
 
