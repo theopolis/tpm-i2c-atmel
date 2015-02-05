@@ -1,7 +1,8 @@
-ATMEL's AT97SC3204T I2C TPM -- Linux Kernel Driver
+ATMEL's AT97SC3204T I2C TPM
+==================================================
 
-Instructions (Kernel):
-======================
+# Instructions (Kernel):
+
 The following few steps will add the I2C TPM as a tristate in drivers/char/tpm.
 You will need to configure your board to include the TPM on the correct I2C bus. 
 Atmel's I2C TPM has an address of 0x29. You can add: 
@@ -16,8 +17,8 @@ to the i2c_board_info struct used by the I2C bus.
 2. Add your preference for CONFIG_TCG_TIS_I2C_ATMEL.
 3. Compile your kernel
 
-Beaglebone (A5+) (Kernel):
-==========================
+# Beaglebone (A5+) (Kernel):
+
 For a BeagleBone, in addition to the above steps, there are two included patches
 to (1) enable the I2C-2 bus, and (2) add the I2C TPM at address 0x29 on I2C-2.
 
@@ -26,8 +27,8 @@ to (1) enable the I2C-2 bus, and (2) add the I2C TPM at address 0x29 on I2C-2.
    [kernel-dir] $ patch -p0 < /tpm-i2c-atmel/patches/bb-ra5-add-i2c1.patch
    [kernel-dir] $ patch -p0 < /tpm-i2c-atmel/patches/bb-ra5-add-tpm-i2c-atmel.patch
 
-Beaglebone (A5+) (Module):
-==========================
+# Beaglebone (A5+) (Module):
+
 If you would like the Atmel I2C TPM driver as a module built outside of the kernel
 you can checkout the beaglebone branch and modify tpm_i2c_atmel.c to specify the 
 I2C bus and address (though should not change).
@@ -40,8 +41,7 @@ I2C bus and address (though should not change).
 4. KERNEL_DIR=/location CROSS_COMPILER=/location/bin/arm-linux- make
 5. Copy the .ko to the BeagleBone: insmod ./tpm_i2c_atmel.ko
 
-Other:
-======
+# Other:
 
 The TPM will need initialization; TrouSerS's tpm_tools can do this from userspace.
 
